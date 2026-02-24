@@ -5,6 +5,10 @@ import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 
 export async function GET() {
+    console.log("API: Fetching categories, db state:", !!db);
+    if (!db) {
+        return NextResponse.json({ error: "Database not initialized" }, { status: 500 });
+    }
     try {
         // 1. Fetch all categories
         const categoriesRef = collection(db, "categories");
@@ -22,7 +26,10 @@ export async function GET() {
             if (!quizzesByCat[catId]) quizzesByCat[catId] = [];
             quizzesByCat[catId].push({
                 id: doc.id,
-                title: data.title
+                title: data.title,
+                level: data.level || "MEDIUM",
+                questionCount: data.questions?.length || 0,
+                timeLimit: data.timeLimit || null
             });
         });
 

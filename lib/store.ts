@@ -17,6 +17,7 @@ interface QuizState {
     nextQuestion: () => void;
     prevQuestion: () => void;
     resetQuiz: () => void;
+    restartQuiz: () => void;
     setLoginModal: (isOpen: boolean) => void;
     setGuestSessionId: (id: string) => void;
 }
@@ -65,6 +66,11 @@ export const useQuizStore = create<QuizState>()(
                 currentQuizId: null,
                 currentCategory: null,
                 currentLevel: null,
+                currentQuestionIndex: 0,
+                answers: []
+            }),
+            
+            restartQuiz: () => set({
                 currentQuestionIndex: 0,
                 answers: []
             }),

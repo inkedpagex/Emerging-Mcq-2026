@@ -10,6 +10,10 @@ export async function GET(
 ) {
     const { id } = await params;
 
+    if (!db) {
+        return NextResponse.json({ error: "Database not initialized" }, { status: 500 });
+    }
+
     try {
         const quizRef = doc(db, "quizzes", id);
         const quizSnap = await getDoc(quizRef);

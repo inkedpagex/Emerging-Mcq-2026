@@ -26,6 +26,7 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
     const [resultData, setResultData] = useState<{ score: number; totalCorrect: number } | null>(null);
     const [timeLeft, setTimeLeft] = useState<number | null>(null);
     const [isTimeUp, setIsTimeUp] = useState(false);
+    const [showAnalysis, setShowAnalysis] = useState(false);
 
     const {
         currentQuestionIndex,
@@ -34,6 +35,7 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
         setAnswer,
         revealMode,
         resetQuiz,
+        restartQuiz,
         answers,
         setLoginModal,
         currentCategory,
@@ -66,7 +68,13 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
                     throw new Error(data.error || "No questions found for this selection.");
                 }
 
-                setQuestions(data.questions);
+                // Ensure all questions have unique IDs (crucial for state restoration)
+                const questionsWithIds = data.questions.map((q: any, idx: number) => ({
+                    ...q,
+                    id: q.id || `q-${idx}`
+                }));
+
+                setQuestions(questionsWithIds);
 
                 // Set time limit if available (convert minutes to seconds)
                 if (data.timeLimit) {
@@ -84,10 +92,12 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
         loadQuiz();
     }, [quizId, currentCategory, currentLevel]);
 
-    // Restore previously selected option when question changes
+    // Restore previously selected option ONLY when question index changes
     useEffect(() => {
         if (questions.length > 0 && questions[currentQuestionIndex]) {
-            const existingAnswer = answers.find(a => a.questionId === questions[currentQuestionIndex].id);
+            const currentQ = questions[currentQuestionIndex];
+            const existingAnswer = answers.find(a => a.questionId === currentQ.id);
+            
             if (existingAnswer) {
                 setSelectedOption(existingAnswer.selectedIndex);
                 if (revealMode === "INSTANT") setIsAnswered(true);
@@ -97,7 +107,7 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
             }
             setStartTime(Date.now());
         }
-    }, [currentQuestionIndex, questions, answers, revealMode]);
+    }, [currentQuestionIndex]); // removed answers and revealMode to prevent race conditions on Next
 
     // Timer Countdown Logic
     useEffect(() => {
@@ -188,37 +198,51 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
 
     const handleFinalSubmit = async () => {
         setLoading(true);
-        const finalAnswers = [...answers];
+        setError(null);
+        try {
+            const finalAnswers = [...answers];
 
-        // Add the current answer if not already there (for the last question submit)
-        const isCorrect = selectedOption === currentQuestion?.correctIndex;
-        const timeSpent = Math.round((Date.now() - startTime) / 1000);
+            // Add the current answer if not already there (for the last question submit)
+            if (currentQuestion && selectedOption !== null) {
+                const isCorrect = selectedOption === currentQuestion.correctIndex;
+                const timeSpent = Math.round((Date.now() - startTime) / 1000);
+                
+                const existingIdx = finalAnswers.findIndex(a => a.questionId === currentQuestion.id);
+                const currentAnswer = { questionId: currentQuestion.id, selectedIndex: selectedOption, isCorrect, timeSpent };
+                
+                if (existingIdx > -1) finalAnswers[existingIdx] = currentAnswer;
+                else finalAnswers.push(currentAnswer);
+            }
 
-        if (currentQuestion && selectedOption !== null) {
-            const existingIdx = finalAnswers.findIndex(a => a.questionId === currentQuestion.id);
-            const currentAnswer = { questionId: currentQuestion.id, selectedIndex: selectedOption, isCorrect, timeSpent };
-            if (existingIdx > -1) finalAnswers[existingIdx] = currentAnswer;
-            else finalAnswers.push(currentAnswer);
+            if (finalAnswers.length === 0) {
+                throw new Error("No answers were recorded.");
+            }
+
+            const res = await saveAttemptAction({
+                userId: user?.uid,
+                userName: user?.displayName || user?.email?.split('@')[0] || "Anonymous",
+                quizId,
+                category: currentCategory,
+                level: currentLevel,
+                answers: finalAnswers,
+                mode: quizId ? "Fixed" : "Dynamic"
+            });
+
+            if (res.success) {
+                setResultData({ 
+                    score: res.score || 0, 
+                    totalCorrect: finalAnswers.filter(a => a.isCorrect).length 
+                });
+                setShowResult(true);
+            } else {
+                throw new Error(res.error || "Failed to save results.");
+            }
+        } catch (err: any) {
+            console.error("Final submit error:", err);
+            setError(err.message || "Something went wrong while finishing the quiz.");
+        } finally {
+            setLoading(false);
         }
-
-        const res = await saveAttemptAction({
-            userId: user?.uid,
-            userName: user?.displayName || user?.email?.split('@')[0] || "Anonymous",
-            quizId,
-            category: currentCategory,
-            level: currentLevel,
-            answers: finalAnswers,
-            mode: quizId ? "Fixed" : "Dynamic"
-        });
-
-        if (res.success) {
-            setResultData({ score: res.score || 0, totalCorrect: finalAnswers.filter(a => a.isCorrect).length });
-            setShowResult(true);
-        } else {
-            alert("Failed to save results. Redirecting to home.");
-            resetQuiz();
-        }
-        setLoading(false);
     };
 
 
@@ -230,16 +254,24 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
                     <h2 className="text-4xl font-black text-gray-900 mb-2">Quiz Completed!</h2>
                     <p className="text-gray-400 font-medium mb-12 italic">Great job! Here is how you performed today.</p>
 
-                    <div className="grid grid-cols-2 gap-6 mb-12">
-                        <div className="bg-gray-50 p-8 rounded-[2rem] border border-gray-100 mt-4">
-                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Your Score</p>
-                            <p className="text-5xl font-black text-green-600 tracking-tighter">{resultData.score}</p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+                        <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Score</p>
+                            <p className="text-3xl font-black text-green-600 tracking-tighter">{resultData.score}</p>
                         </div>
-                        <div className="bg-gray-50 p-8 rounded-[2rem] border border-gray-100 -mt-4">
-                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Accuracy</p>
-                            <p className="text-5xl font-black text-blue-600 tracking-tighter">
+                        <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Accuracy</p>
+                            <p className="text-3xl font-black text-blue-600 tracking-tighter">
                                 {Math.round((resultData.totalCorrect / questions.length) * 100)}%
                             </p>
+                        </div>
+                        <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-green-600">Correct</p>
+                            <p className="text-3xl font-black text-green-600 tracking-tighter">{resultData.totalCorrect}</p>
+                        </div>
+                        <div className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-red-500">Incorrect</p>
+                            <p className="text-3xl font-black text-red-500 tracking-tighter">{questions.length - resultData.totalCorrect}</p>
                         </div>
                     </div>
 
@@ -250,13 +282,101 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
                         >
                             View Leaderboard & My Rank 📈
                         </button>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setShowAnalysis(true)}
+                                className="flex-1 bg-blue-50 text-blue-600 py-4 rounded-2xl font-bold hover:bg-blue-100 transition"
+                            >
+                                Review Answers 🔍
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setShowResult(false);
+                                    setShowAnalysis(false);
+                                    restartQuiz();
+                                }}
+                                className="flex-1 bg-gray-50 text-gray-600 py-4 rounded-2xl font-bold hover:bg-gray-100 transition"
+                            >
+                                Try Again 🔄
+                            </button>
+                        </div>
                         <button
                             onClick={() => resetQuiz()}
-                            className="w-full bg-white text-gray-400 py-4 rounded-2xl font-bold hover:text-gray-600 transition"
+                            className="w-full bg-white text-gray-300 py-2 rounded-2xl font-medium hover:text-gray-500 transition text-sm"
                         >
                             Back to Home
                         </button>
                     </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (showAnalysis) {
+        return (
+            <div className="max-w-4xl mx-auto py-8 px-4 animate-in fade-in duration-500">
+                <div className="flex items-center justify-between mb-8">
+                    <div>
+                        <h2 className="text-3xl font-black text-gray-900">Quiz Analysis</h2>
+                        <p className="text-gray-400 font-medium">Review your performance question by question.</p>
+                    </div>
+                    <button 
+                        onClick={() => setShowAnalysis(false)}
+                        className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-black transition"
+                    >
+                        Back to Results
+                    </button>
+                </div>
+
+                <div className="space-y-6">
+                    {questions.map((q, idx) => {
+                        const userAnswer = answers.find(a => a.questionId === q.id);
+                        const isCorrect = userAnswer?.isCorrect;
+
+                        return (
+                            <div key={q.id} className={`bg-white p-6 rounded-3xl border-2 transition-all ${isCorrect ? "border-green-100" : "border-red-100"}`}>
+                                <div className="flex items-center gap-3 mb-4">
+                                    <span className={`h-8 w-8 rounded-lg flex items-center justify-center font-bold text-white ${isCorrect ? "bg-green-500" : "bg-red-500"}`}>
+                                        {idx + 1}
+                                    </span>
+                                    <h3 className="font-bold text-gray-900 leading-tight">{q.questionText}</h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                                    {q.options.map((opt, optIdx) => {
+                                        const isUserSelection = userAnswer?.selectedIndex === optIdx;
+                                        const isCorrectAns = q.correctIndex === optIdx;
+                                        
+                                        let style = "bg-gray-50 border-gray-100 text-gray-500";
+                                        if (isCorrectAns) style = "bg-green-500 border-green-500 text-white shadow-lg shadow-green-100";
+                                        else if (isUserSelection) style = "bg-red-500 border-red-500 text-white shadow-lg shadow-red-100";
+
+                                        return (
+                                            <div key={optIdx} className={`p-3 rounded-xl border-2 text-sm font-semibold flex items-center gap-3 ${style}`}>
+                                                <span className="opacity-50">{String.fromCharCode(65 + optIdx)}</span>
+                                                {opt}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {q.explanation && (
+                                    <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                                        <p className="text-blue-700 text-xs leading-relaxed"><span className="font-black">EXPLANATION:</span> {q.explanation}</p>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                <div className="mt-12 text-center">
+                    <button 
+                        onClick={() => resetQuiz()}
+                        className="bg-green-600 text-white px-12 py-5 rounded-2xl font-black text-lg hover:bg-green-700 transition shadow-xl shadow-green-100"
+                    >
+                        Finish & Go Home
+                    </button>
                 </div>
             </div>
         );

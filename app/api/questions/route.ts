@@ -10,6 +10,10 @@ export async function GET(request: Request) {
     const level = searchParams.get("level"); // EASY, MEDIUM, HARD, MIX
     const limitParam = parseInt(searchParams.get("limit") || "50");
 
+    if (!db) {
+        return NextResponse.json({ error: "Database not initialized" }, { status: 500 });
+    }
+
     if (!category || !level) {
         return NextResponse.json({ error: "Missing category or level" }, { status: 400 });
     }
@@ -92,7 +96,7 @@ export async function GET(request: Request) {
                 filtered = [...filtered, ...shuffle(remaining).slice(0, limitParam - filtered.length)];
             }
         } else {
-            const targetDifficulty = mapLevel(level);
+            const targetDifficulty = mapLevel(level!);
             filtered = allQuestions.filter(q => q.difficulty?.toUpperCase() === targetDifficulty);
 
             if (filtered.length === 0) {

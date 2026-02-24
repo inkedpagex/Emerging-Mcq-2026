@@ -11,6 +11,8 @@ interface LeaderboardRow {
     name: string;
     score: number;
     attempted: number;
+    correct: number;
+    incorrect: number;
     accuracy: number;
 }
 
@@ -21,6 +23,7 @@ export default function LeaderboardPage() {
 
     useEffect(() => {
         async function fetchLeaderboard() {
+            if (!db) return;
             try {
                 const attemptsRef = collection(db, "attempts");
                 const q = query(attemptsRef, orderBy("scoreFinal", "desc"), limit(50));
@@ -61,6 +64,8 @@ export default function LeaderboardPage() {
                         name: entry.name,
                         score: Math.round(entry.totalScore * 100) / 100,
                         attempted: entry.totalAttempted,
+                        correct: entry.totalCorrect,
+                        incorrect: entry.totalAttempted - entry.totalCorrect,
                         accuracy: entry.totalAttempted > 0 ? entry.totalCorrect / entry.totalAttempted : 0,
                     }));
 
@@ -109,8 +114,8 @@ export default function LeaderboardPage() {
                             <tr className="bg-gray-50 border-b border-gray-100">
                                 <th className="py-6 px-8 text-xs font-bold text-gray-400 uppercase tracking-widest">Rank</th>
                                 <th className="py-6 px-8 text-xs font-bold text-gray-400 uppercase tracking-widest">User</th>
-                                <th className="py-6 px-8 text-xs font-bold text-gray-400 uppercase tracking-widest">A / C</th>
-                                <th className="py-6 px-8 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Score</th>
+                                <th className="py-6 px-8 text-xs font-bold text-gray-400 uppercase tracking-widest">Progress & Accuracy</th>
+                                <th className="py-6 px-8 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Nice Score</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -137,9 +142,36 @@ export default function LeaderboardPage() {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="py-6 px-8">
-                                        <p className="font-bold text-gray-800">{row.attempted}</p>
-                                        <p className="text-xs text-gray-400 tracking-tighter uppercase font-bold">Total Q</p>
+                                    <td className="py-6 px-8 min-w-[180px]">
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm font-black text-gray-800">{row.attempted} <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">Total Q</span></span>
+                                                <span className="text-[10px] font-black text-gray-400">{(row.accuracy * 100).toFixed(0)}%</span>
+                                            </div>
+                                            
+                                            {/* Minimalist Progress Bar */}
+                                            <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden flex">
+                                                <div 
+                                                    className="h-full bg-green-500 transition-all duration-500" 
+                                                    style={{ width: `${row.accuracy * 100}%` }}
+                                                ></div>
+                                                <div 
+                                                    className="h-full bg-red-400 transition-all duration-500" 
+                                                    style={{ width: `${(1 - row.accuracy) * (row.incorrect / row.attempted || 1) * 100}%` }}
+                                                ></div>
+                                            </div>
+
+                                            <div className="flex gap-3 text-[10px] items-center font-black">
+                                                <span className="text-green-600 flex items-center gap-1">
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                                                    {row.correct} Correct
+                                                </span>
+                                                <span className="text-red-400 flex items-center gap-1">
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-red-400"></span>
+                                                    {row.incorrect} Incorrect
+                                                </span>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td className="py-6 px-8 text-right">
                                         <span className="text-2xl font-black text-gray-900 group-hover:text-green-600 transition tracking-tighter">

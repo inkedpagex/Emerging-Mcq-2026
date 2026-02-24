@@ -8,27 +8,66 @@ interface Category {
     id: string;
     name: string;
     slug: string;
-    quizzes?: { id: string; title: string }[];
+    quizzes?: { 
+        id: string; 
+        title: string; 
+        level?: string; 
+        questionCount?: number; 
+        timeLimit?: number | null 
+    }[];
 }
 
 export default function HomeView() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-    const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+    const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
+    const [completedQuizIds, setCompletedQuizIds] = useState<string[]>([]);
+    const { user } = useAuth();
+    const guestSessionId = useQuizStore(state => state.guestSessionId);
     const startQuiz = useQuizStore((state) => state.startQuiz);
 
     useEffect(() => {
         const fetchCats = async () => {
             try {
                 const res = await fetch("/api/categories");
+                const resClone = res.clone();
+                console.log("Fetch categories response status:", res.status, res.ok);
+                const rawText = await resClone.text();
+                console.log("Fetch categories raw text:", rawText);
                 const data = await res.json();
-                setCategories(data);
+                console.log("Fetch categories data:", data);
+                if (Array.isArray(data)) {
+                    setCategories(data);
+                } else {
+                    console.error("Fetched categories is not an array:", data);
+                    setCategories([]); // Fallback to empty array
+                }
             } catch (error) {
                 console.error("Failed to fetch categories:", error);
+                setCategories([]); // Fallback to empty array
             }
         };
         fetchCats();
     }, []);
+
+    useEffect(() => {
+        const fetchCompleted = async () => {
+            if (!user && !guestSessionId) return;
+            try {
+                const url = user 
+                    ? `/api/user/attempts?userId=${user.uid}` 
+                    : `/api/user/attempts?guestSessionId=${guestSessionId}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.completedQuizIds) {
+                    setCompletedQuizIds(data.completedQuizIds);
+                }
+            } catch (error) {
+                console.error("Failed to fetch completed quizzes:", error);
+            }
+        };
+        fetchCompleted();
+    }, [user, guestSessionId]);
 
     const categoryIcons: Record<string, string> = {
         "aptitude": "📊",
@@ -72,41 +111,68 @@ export default function HomeView() {
                         </div>
                         <div>
                             <h2 className="text-2xl font-black text-gray-900 leading-tight">{selectedCategory.name}</h2>
-                            <p className="text-sm text-gray-400 font-medium">Select a difficulty level to begin</p>
+                            <p className="text-sm text-gray-400 font-medium">Select a quiz to begin your practice</p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-10">
-                        {levels.map((lvl) => (
-                            <button
-                                key={lvl.id}
-                                onClick={() => setSelectedLevel(lvl.id)}
-                                className={`p-6 rounded-2xl border-2 text-left transition-all duration-200 group relative overflow-hidden ${selectedLevel === lvl.id
-                                    ? `ring-4 ring-green-600/10 border-green-600 shadow-md`
-                                    : `bg-white border-gray-100 hover:border-gray-200`
-                                    }`}
-                            >
-                                <div className={`h-10 w-10 ${lvl.color} rounded-xl flex items-center justify-center text-lg font-black mb-3 group-hover:scale-110 transition-transform`}>
-                                    {lvl.name[0]}
-                                </div>
-                                <h4 className="font-black text-gray-900 mb-1">{lvl.name}</h4>
-                                <p className="text-xs text-gray-400 font-medium leading-relaxed">{lvl.desc}</p>
+                    <div className="grid grid-cols-1 gap-3 mb-10 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                        {selectedCategory.quizzes && selectedCategory.quizzes.length > 0 ? (
+                            selectedCategory.quizzes.map((quiz: any, idx) => {
+                                const isCompleted = completedQuizIds.includes(quiz.id);
+                                return (
+                                    <button
+                                        key={quiz.id}
+                                        onClick={() => setSelectedQuizId(quiz.id)}
+                                        className={`p-5 rounded-2xl border-2 text-left transition-all duration-200 group relative flex items-center justify-between ${selectedQuizId === quiz.id
+                                            ? `ring-4 ring-green-600/10 border-green-600 bg-green-50/30`
+                                            : `bg-white border-gray-100 hover:border-gray-200`
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-xs font-black
+                                                ${quiz.level === 'EASY' || quiz.level === 'LOW' ? 'bg-blue-50 text-blue-600' : 
+                                                  quiz.level === 'HARD' || quiz.level === 'HIGH' ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}
+                                            `}>
+                                                Q{idx + 1}
+                                            </div>
+                                            <div>
+                                                <h4 className="font-black text-gray-900 text-sm">Quiz {idx + 1}</h4>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{quiz.level || 'MEDIUM'}</span>
+                                                    <span className="h-1 w-1 bg-gray-200 rounded-full"></span>
+                                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{quiz.questionCount || 0} Questions</span>
+                                                </div>
+                                            </div>
+                                        </div>
 
-                                {selectedLevel === lvl.id && (
-                                    <div className="absolute top-4 right-4 h-6 w-6 bg-green-600 rounded-full flex items-center justify-center text-white text-xs">
-                                        ✓
-                                    </div>
-                                )}
-                            </button>
-                        ))}
+                                        <div className="flex items-center gap-3">
+                                            {isCompleted && (
+                                                <div className="h-6 w-6 bg-green-500 rounded-full flex items-center justify-center text-white text-[10px] shadow-sm shadow-green-100">
+                                                    ✓
+                                                </div>
+                                            )}
+                                            {selectedQuizId === quiz.id && !isCompleted && (
+                                                <div className="h-6 w-6 bg-white border-2 border-green-600 rounded-full flex items-center justify-center text-green-600 text-[10px]">
+                                                    ●
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
+                                );
+                            })
+                        ) : (
+                            <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                <p className="text-gray-400 font-medium italic">No quizzes available for this category yet.</p>
+                            </div>
+                        )}
                     </div>
 
                     <button
-                        disabled={!selectedLevel}
-                        onClick={() => startQuiz(null, selectedCategory.slug, selectedLevel, "INSTANT")}
+                        disabled={!selectedQuizId}
+                        onClick={() => startQuiz(selectedQuizId, selectedCategory.slug, null, "INSTANT")}
                         className="w-full bg-green-600 text-white py-5 rounded-2xl font-black text-xl hover:bg-green-700 transition-all shadow-xl shadow-green-100 active:scale-[0.98] disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed"
                     >
-                        Start Quiz
+                        Start Practicing
                     </button>
                 </div>
             </div>

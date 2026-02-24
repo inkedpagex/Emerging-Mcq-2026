@@ -25,7 +25,7 @@ export default function AttemptsPage() {
 
     useEffect(() => {
         const fetchAttempts = async () => {
-            if (!user) return;
+            if (!user || !db) return;
             try {
                 const q = query(
                     collection(db, "attempts"),
