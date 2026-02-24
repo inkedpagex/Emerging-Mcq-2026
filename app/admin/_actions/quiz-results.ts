@@ -18,6 +18,7 @@ async function calculateWeightedScore(totalAttempted: number, totalCorrect: numb
 
 export async function saveAttemptAction(data: {
     userId?: string;
+    userName?: string;
     guestSessionId?: string;
     quizId: string | null;
     category?: string | null;
@@ -34,6 +35,8 @@ export async function saveAttemptAction(data: {
         const attemptsRef = collection(db, "attempts");
         const attempt = await addDoc(attemptsRef, {
             userId: data.userId || null,
+            userName: data.userName || null,
+
             guestSessionId: data.guestSessionId || null,
             quizId: data.quizId,
             category: data.category || null,

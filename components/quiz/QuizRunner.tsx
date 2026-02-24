@@ -203,6 +203,7 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
 
         const res = await saveAttemptAction({
             userId: user?.uid,
+            userName: user?.displayName || user?.email?.split('@')[0] || "Anonymous",
             quizId,
             category: currentCategory,
             level: currentLevel,

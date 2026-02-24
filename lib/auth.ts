@@ -1,13 +1,11 @@
 "use client";
 
-import { auth } from "./firebase-client";
+import { auth, googleProvider } from "./firebase-client";
 import {
     signOut,
+    signInWithPopup,
     onAuthStateChanged,
     User,
-    signInWithEmailAndPassword,
-    createUserWithEmailAndPassword,
-    updateProfile
 } from "firebase/auth";
 import { useEffect, useState } from "react";
 
@@ -23,20 +21,11 @@ export function useAuth() {
         return () => unsubscribe();
     }, []);
 
-    const login = async (email: string, pass: string) => {
+    const loginWithGoogle = async () => {
         try {
-            await signInWithEmailAndPassword(auth, email, pass);
+            await signInWithPopup(auth, googleProvider);
         } catch (error: any) {
-            throw new Error(error.message || "Login failed");
-        }
-    };
-
-    const register = async (name: string, email: string, pass: string) => {
-        try {
-            const res = await createUserWithEmailAndPassword(auth, email, pass);
-            await updateProfile(res.user, { displayName: name });
-        } catch (error: any) {
-            throw new Error(error.message || "Registration failed");
+            throw new Error(error.message || "Google login failed");
         }
     };
 
@@ -50,5 +39,5 @@ export function useAuth() {
 
     const isAdmin = user ? (process.env.NEXT_PUBLIC_ADMIN_EMAILS || "").split(",").includes(user.email || "") : false;
 
-    return { user, loading, login, register, logout, isAdmin };
+    return { user, loading, loginWithGoogle, logout, isAdmin };
 }
