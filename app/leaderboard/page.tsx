@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -31,15 +32,20 @@ export default function LeaderboardPage() {
                 snapshot.docs.forEach((doc) => {
                     const d = doc.data();
                     const userId = d.userId || d.guestSessionId || "Anonymous";
+                    const displayName = d.userName || null;
                     const existing = userMap.get(userId);
 
                     if (existing) {
                         existing.totalScore += d.scoreFinal || 0;
                         existing.totalAttempted += d.totalAttempted || 0;
                         existing.totalCorrect += d.totalCorrect || 0;
+                        // Update name if we find a real userName in any attempt
+                        if (displayName && existing.name.startsWith("Player")) {
+                            existing.name = displayName;
+                        }
                     } else {
                         userMap.set(userId, {
-                            name: d.userName || d.userId?.slice(0, 8) || "Anonymous",
+                            name: displayName || "Player",
                             totalScore: d.scoreFinal || 0,
                             totalAttempted: d.totalAttempted || 0,
                             totalCorrect: d.totalCorrect || 0,

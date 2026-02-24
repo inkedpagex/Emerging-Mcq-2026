@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useQuizStore } from "@/lib/store";
 import HomeView from "@/components/quiz/HomeView";

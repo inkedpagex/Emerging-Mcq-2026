@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
@@ -70,7 +71,7 @@ export default function AttemptsPage() {
                     <div key={attempt.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:border-green-100 transition-all flex flex-col sm:flex-row items-center justify-between gap-6">
                         <div className="flex items-center gap-4 w-full">
                             <div className={`h-14 w-14 shrink-0 rounded-2xl flex items-center justify-center text-2xl ${attempt.scoreFinal > 80 ? "bg-green-50 text-green-600" :
-                                    attempt.scoreFinal > 50 ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"
+                                attempt.scoreFinal > 50 ? "bg-blue-50 text-blue-600" : "bg-orange-50 text-orange-600"
                                 }`}>
                                 {attempt.scoreFinal > 80 ? "🔥" : attempt.scoreFinal > 50 ? "⚡" : "📚"}
                             </div>
