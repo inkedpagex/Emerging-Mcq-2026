@@ -7,7 +7,7 @@ import LoginModal from "@/components/auth/LoginModal";
 
 export default function Navbar() {
     const { user, logout } = useAuth();
-    const { isLoginModalOpen, setLoginModal } = useQuizStore();
+    const { isLoginModalOpen, setLoginModal, resetQuiz } = useQuizStore();
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -19,9 +19,9 @@ export default function Navbar() {
     }, []);
 
     const navLinks = [
-        { name: "Home", href: "/" },
-        { name: "Categories", href: "#categories" },
-        { name: "Leaderboard", href: "/leaderboard" },
+        { name: "Home", href: "/", reset: true },
+        { name: "Categories", href: "#categories", reset: false },
+        { name: "Leaderboard", href: "/leaderboard", reset: true },
     ];
 
     return (
@@ -29,7 +29,7 @@ export default function Navbar() {
             <nav className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ${isScrolled ? "h-16 bg-white/80 backdrop-blur-lg border-b border-gray-100 shadow-sm" : "h-20 bg-transparent"}`}>
                 <div className="max-w-6xl mx-auto px-4 h-full flex items-center justify-between">
                     {/* Logo */}
-                    <div className="flex items-center gap-2.5 group cursor-pointer" onClick={() => window.location.href = "/"}>
+                    <div className="flex items-center gap-2.5 group cursor-pointer" onClick={() => { resetQuiz(); window.location.href = "/"; }}>
                         <div className="h-9 w-9 bg-green-600 rounded-xl flex items-center justify-center transform group-hover:rotate-6 transition-transform shadow-lg shadow-green-100">
                             <span className="text-white font-black text-xl italic">E</span>
                         </div>
@@ -44,6 +44,13 @@ export default function Navbar() {
                             <a
                                 key={link.name}
                                 href={link.href}
+                                onClick={(e) => {
+                                    if (link.reset) resetQuiz();
+                                    if (link.href.startsWith("#")) {
+                                        e.preventDefault();
+                                        document.getElementById(link.href.substring(1))?.scrollIntoView({ behavior: 'smooth' });
+                                    }
+                                }}
                                 className="px-5 py-2 rounded-full text-sm font-bold text-gray-400 hover:text-green-600 hover:bg-white hover:shadow-sm transition-all duration-200"
                             >
                                 {link.name}
@@ -75,12 +82,17 @@ export default function Navbar() {
                                             <p className="text-sm font-bold text-gray-900 truncate">{user.email}</p>
                                         </div>
                                         <div className="p-2">
-                                            <button className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-green-50 hover:text-green-600 transition flex items-center gap-3">
+                                            <a href="/profile/attempts" className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-green-50 hover:text-green-600 transition flex items-center gap-3">
                                                 <span>📝</span> My Attempts
-                                            </button>
-                                            <button className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-green-50 hover:text-green-600 transition flex items-center gap-3">
+                                            </a>
+                                            <a href="/profile/performance" className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-green-50 hover:text-green-600 transition flex items-center gap-3">
                                                 <span>📊</span> Performance
-                                            </button>
+                                            </a>
+                                            {useAuth().isAdmin && (
+                                                <a href="/admin" className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold text-blue-600 hover:bg-blue-50 transition flex items-center gap-3">
+                                                    <span>⚙️</span> Admin Panel
+                                                </a>
+                                            )}
                                             <div className="h-[1px] bg-gray-50 my-2 mx-2"></div>
                                             <button
                                                 onClick={() => { logout(); setIsProfileOpen(false); }}

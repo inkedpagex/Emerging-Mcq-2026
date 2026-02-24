@@ -24,6 +24,8 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
     const [startTime, setStartTime] = useState(Date.now());
     const [showResult, setShowResult] = useState(false);
     const [resultData, setResultData] = useState<{ score: number; totalCorrect: number } | null>(null);
+    const [timeLeft, setTimeLeft] = useState<number | null>(null);
+    const [isTimeUp, setIsTimeUp] = useState(false);
 
     const {
         currentQuestionIndex,
@@ -65,6 +67,13 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
                 }
 
                 setQuestions(data.questions);
+
+                // Set time limit if available (convert minutes to seconds)
+                if (data.timeLimit) {
+                    setTimeLeft(data.timeLimit * 60);
+                } else {
+                    setTimeLeft(null); // No timer
+                }
             } catch (err: any) {
                 console.error("Quiz load error:", err);
                 setError(err.message || "Something went wrong while loading the quiz.");
@@ -89,6 +98,29 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
             setStartTime(Date.now());
         }
     }, [currentQuestionIndex, questions, answers, revealMode]);
+
+    // Timer Countdown Logic
+    useEffect(() => {
+        if (timeLeft === null || showResult || loading || error) return;
+
+        if (timeLeft <= 0) {
+            setIsTimeUp(true);
+            handleFinalSubmit(); // Auto-submit when time is up
+            return;
+        }
+
+        const timer = setInterval(() => {
+            setTimeLeft(prev => (prev !== null ? prev - 1 : null));
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [timeLeft, showResult, loading, error]);
+
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
 
     if (loading) return (
         <div className="flex flex-col items-center justify-center py-32 animate-in fade-in duration-500">
@@ -150,33 +182,42 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
             setIsAnswered(false);
             nextQuestion();
         } else {
-            // End of quiz
-            setLoading(true);
-            const finalAnswers = [...answers];
+            await handleFinalSubmit();
+        }
+    };
+
+    const handleFinalSubmit = async () => {
+        setLoading(true);
+        const finalAnswers = [...answers];
+
+        // Add the current answer if not already there (for the last question submit)
+        const isCorrect = selectedOption === currentQuestion?.correctIndex;
+        const timeSpent = Math.round((Date.now() - startTime) / 1000);
+
+        if (currentQuestion && selectedOption !== null) {
             const existingIdx = finalAnswers.findIndex(a => a.questionId === currentQuestion.id);
             const currentAnswer = { questionId: currentQuestion.id, selectedIndex: selectedOption, isCorrect, timeSpent };
-
             if (existingIdx > -1) finalAnswers[existingIdx] = currentAnswer;
             else finalAnswers.push(currentAnswer);
-
-            const res = await saveAttemptAction({
-                userId: user?.uid,
-                quizId,
-                category: currentCategory,
-                level: currentLevel,
-                answers: finalAnswers,
-                mode: quizId ? "Fixed" : "Dynamic"
-            });
-
-            if (res.success) {
-                setResultData({ score: res.score || 0, totalCorrect: finalAnswers.filter(a => a.isCorrect).length });
-                setShowResult(true);
-            } else {
-                alert("Failed to save results. Redirecting to home.");
-                resetQuiz();
-            }
-            setLoading(false);
         }
+
+        const res = await saveAttemptAction({
+            userId: user?.uid,
+            quizId,
+            category: currentCategory,
+            level: currentLevel,
+            answers: finalAnswers,
+            mode: quizId ? "Fixed" : "Dynamic"
+        });
+
+        if (res.success) {
+            setResultData({ score: res.score || 0, totalCorrect: finalAnswers.filter(a => a.isCorrect).length });
+            setShowResult(true);
+        } else {
+            alert("Failed to save results. Redirecting to home.");
+            resetQuiz();
+        }
+        setLoading(false);
     };
 
 
@@ -247,6 +288,11 @@ export default function QuizRunner({ quizId }: { quizId: string | null }) {
                         style={{ width: `${progress}%` }}
                     />
                 </div>
+                {timeLeft !== null && (
+                    <div className={`mr-4 text-xs font-black flex items-center gap-1.5 ${timeLeft < 60 ? "text-red-500 animate-pulse" : "text-gray-900"}`}>
+                        <span>⏱️</span> {formatTime(timeLeft)}
+                    </div>
+                )}
                 <button onClick={resetQuiz} className="text-gray-400 hover:text-red-500 text-xs font-semibold">Quit</button>
             </div>
 
