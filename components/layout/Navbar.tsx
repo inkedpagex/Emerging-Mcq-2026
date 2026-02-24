@@ -6,7 +6,7 @@ import { useQuizStore } from "@/lib/store";
 import LoginModal from "@/components/auth/LoginModal";
 
 export default function Navbar() {
-    const { user, logout } = useAuth();
+    const { user, logout, isAdmin } = useAuth();
     const { isLoginModalOpen, setLoginModal, resetQuiz } = useQuizStore();
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -88,7 +88,7 @@ export default function Navbar() {
                                             <a href="/profile/performance" className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold text-gray-600 hover:bg-green-50 hover:text-green-600 transition flex items-center gap-3">
                                                 <span>📊</span> Performance
                                             </a>
-                                            {useAuth().isAdmin && (
+                                            {isAdmin && (
                                                 <a href="/admin" className="w-full text-left px-4 py-2.5 rounded-xl text-sm font-bold text-blue-600 hover:bg-blue-50 transition flex items-center gap-3">
                                                     <span>⚙️</span> Admin Panel
                                                 </a>
