@@ -1,6 +1,6 @@
 "use client";
 
-import { auth } from "./firebase";
+import { auth } from "./firebase-client";
 import {
     signOut,
     onAuthStateChanged,
