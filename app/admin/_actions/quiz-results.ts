@@ -1,6 +1,7 @@
 "use server";
 
-
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 /**
  * Weighted Score Formula:
@@ -14,8 +15,6 @@ async function calculateWeightedScore(totalAttempted: number, totalCorrect: numb
     return Math.round(score * 100) / 100;
 }
 
-import { db } from "@/lib/firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export async function saveAttemptAction(data: {
     userId?: string;
