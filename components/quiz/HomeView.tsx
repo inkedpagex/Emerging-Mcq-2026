@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useQuizStore } from "@/lib/store";
 import { useAuth } from "@/lib/auth";
+import { db } from "@/lib/firebase";
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
 
 interface Category {
     id: string;
@@ -22,6 +24,8 @@ export default function HomeView() {
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [selectedQuizId, setSelectedQuizId] = useState<string | null>(null);
     const [completedQuizIds, setCompletedQuizIds] = useState<string[]>([]);
+    const [topRankers, setTopRankers] = useState<any[]>([]);
+    const [loadingRankers, setLoadingRankers] = useState(true);
     const { user } = useAuth();
     const guestSessionId = useQuizStore(state => state.guestSessionId);
     const startQuiz = useQuizStore((state) => state.startQuiz);
@@ -51,23 +55,45 @@ export default function HomeView() {
     }, []);
 
     useEffect(() => {
-        const fetchCompleted = async () => {
-            if (!user && !guestSessionId) return;
+        const fetchTopRankers = async () => {
+            if (!db) return;
             try {
-                const url = user 
-                    ? `/api/user/attempts?userId=${user.uid}` 
-                    : `/api/user/attempts?guestSessionId=${guestSessionId}`;
-                const res = await fetch(url);
-                const data = await res.json();
-                if (data.completedQuizIds) {
-                    setCompletedQuizIds(data.completedQuizIds);
-                }
-            } catch (error) {
-                console.error("Failed to fetch completed quizzes:", error);
+                const attemptsRef = collection(db, "attempts");
+                // Fetch more than 3 to aggregate by user if needed, 
+                // but let's keep it simple for preview: top 3 unique users from recent attempts
+                const q = query(attemptsRef, orderBy("scoreFinal", "desc"), limit(20));
+                const snapshot = await getDocs(q);
+                
+                const userMap = new Map();
+                snapshot.docs.forEach(doc => {
+                    const d = doc.data();
+                    const uid = d.userId || d.guestSessionId || "Anonymous";
+                    if (!userMap.has(uid)) {
+                        userMap.set(uid, {
+                            name: d.userName || "Player",
+                            score: d.scoreFinal || 0
+                        });
+                    }
+                });
+
+                const sorted = Array.from(userMap.values())
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 3)
+                    .map((item, idx) => ({
+                        ...item,
+                        rank: idx + 1,
+                        emoji: idx === 0 ? "🥇" : idx === 1 ? "🥈" : "🥉"
+                    }));
+                
+                setTopRankers(sorted);
+            } catch (err) {
+                console.error("Top rankers fetch error:", err);
+            } finally {
+                setLoadingRankers(false);
             }
         };
-        fetchCompleted();
-    }, [user, guestSessionId]);
+        fetchTopRankers();
+    }, []);
 
     const categoryIcons: Record<string, string> = {
         "aptitude": "📊",
@@ -354,20 +380,28 @@ export default function HomeView() {
 
                     <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden mb-10">
                         <div className="divide-y divide-gray-50">
-                            {[
-                                { rank: 1, name: "Aryan Sharma", score: 8520, emoji: "🥇" },
-                                { rank: 2, name: "Sneha Kapur", score: 7240, emoji: "🥈" },
-                                { rank: 3, name: "Ishan Patel", score: 6150, emoji: "🥉" }
-                            ].map((user) => (
-                                <div key={user.rank} className="p-6 flex items-center justify-between hover:bg-green-50/30 transition">
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-2xl">{user.emoji}</span>
-                                        <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center font-black text-gray-400">{user.name[0]}</div>
-                                        <p className="font-black text-gray-800">{user.name}</p>
-                                    </div>
-                                    <p className="text-xl font-black text-green-600 tracking-tighter">{user.score.toLocaleString()}</p>
+                            {loadingRankers ? (
+                                <div className="p-12 text-center text-gray-400 font-bold">
+                                    Loading rankers...
                                 </div>
-                            ))}
+                            ) : topRankers.length > 0 ? (
+                                topRankers.map((u) => (
+                                    <div key={u.rank} className="p-6 flex items-center justify-between hover:bg-green-50/30 transition">
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-2xl">{u.emoji}</span>
+                                            <div className="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center font-black text-gray-400 border border-gray-100">
+                                                {u.name[0]}
+                                            </div>
+                                            <p className="font-black text-gray-800">{u.name}</p>
+                                        </div>
+                                        <p className="text-xl font-black text-green-600 tracking-tighter">{Math.round(u.score).toLocaleString()}</p>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="p-12 text-center text-gray-400 italic">
+                                    No rankings yet. Start a quiz to be the first!
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -397,21 +431,19 @@ export default function HomeView() {
                         <div>
                             <h4 className="text-white font-black uppercase text-xs tracking-widest mb-6">Quick Links</h4>
                             <ul className="space-y-4">
-                                {["Home", "Leaderboard", "About Us", "Contact"].map(link => (
-                                    <li key={link}>
-                                        <a href="#" className="text-gray-500 hover:text-green-500 font-bold transition">{link}</a>
-                                    </li>
-                                ))}
+                                <li><a href="/" className="text-gray-500 hover:text-green-500 font-bold transition">Home</a></li>
+                                <li><a href="/leaderboard" className="text-gray-500 hover:text-green-500 font-bold transition">Leaderboard</a></li>
+                                <li><a href="#" className="text-gray-500 hover:text-green-500 font-bold transition">About Us</a></li>
+                                <li><a href="#" className="text-gray-500 hover:text-green-500 font-bold transition">Contact</a></li>
                             </ul>
                         </div>
                         <div>
                             <h4 className="text-white font-black uppercase text-xs tracking-widest mb-6">Support</h4>
                             <ul className="space-y-4">
-                                {["Disclaimer", "Terms of Use", "Privacy Policy", "FAQ"].map(link => (
-                                    <li key={link}>
-                                        <a href="#" className="text-gray-500 hover:text-green-500 font-bold transition">{link}</a>
-                                    </li>
-                                ))}
+                                <li><a href="#" className="text-gray-500 hover:text-green-500 font-bold transition">Disclaimer</a></li>
+                                <li><a href="#" className="text-gray-500 hover:text-green-500 font-bold transition">Terms of Use</a></li>
+                                <li><a href="#" className="text-gray-500 hover:text-green-500 font-bold transition">Privacy Policy</a></li>
+                                <li><a href="#" className="text-gray-500 hover:text-green-500 font-bold transition">FAQ</a></li>
                             </ul>
                         </div>
                     </div>
